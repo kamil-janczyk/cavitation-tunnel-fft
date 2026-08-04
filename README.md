@@ -46,308 +46,195 @@ streamlit run app.py
 ```
 
 ---
----
 
 ## Mathematical Background
 
-### 1. Blade Passing Frequency (BPF)
+### Blade Passing Frequency (BPF)
 
-The blade passing frequency represents the frequency at which propeller blades pass a fixed point in the flow.
+Blade Passing Frequency is calculated as:
 
-\[
-BPF = n \cdot Z
-\]
+$$
+BPF=n \cdot Z
+$$
 
 where:
 
-- \(BPF\) – blade passing frequency [Hz]
 - \(n\) – rotational speed [rev/s]
-- \(Z\) – number of propeller blades
+- \(Z\) – number of blades
 
-The \(k\)-th harmonic frequency is:
+The harmonic frequencies are:
 
-\[
-f_k = k \cdot BPF
-\]
+$$
+f_k=k \cdot BPF
+$$
 
-where:
-
-- \(k = 1...5\) corresponds to harmonics H1–H5.
+where \(k=1...5\) corresponds to harmonics H1–H5.
 
 ---
 
-### 2. Sliding Window FFT
+### Sliding FFT
 
-The pressure signal is divided into overlapping time windows.
+The pressure signal is divided into overlapping windows. Before FFT calculation:
 
-For a sampling frequency \(f_s\), window length \(T_w\), and overlap \(O\):
+1. The mean value is removed:
 
-\[
-N = T_w \cdot f_s
-\]
+$$
+x(t)=x(t)-\bar{x}
+$$
+
+2. The signal length is adjusted to contain an integer number of BPF cycles.
+
+Number of samples per FFT window:
+
+$$
+N=T_w \cdot f_s
+$$
 
 where:
 
-- \(N\) – number of samples in FFT window
-- \(T_w\) – window duration [s]
+- \(T_w\) – window length [s]
 - \(f_s\) – sampling frequency [Hz]
 
-The step between consecutive windows is:
+Window step:
 
-\[
-step = T_w(1-O)
-\]
+$$
+step=T_w(1-O)
+$$
 
-Example:
+where \(O\) is the overlap ratio.
 
-\[
-T_w=1s,\quad O=50\%
-\]
+For each window, the FFT is calculated using the real FFT:
 
-gives:
+$$
+X(k)=rFFT(x)
+$$
 
-\[
-step=0.5s
-\]
+The amplitude spectrum used for harmonic extraction is:
 
-For each window, the discrete Fourier transform is calculated:
-
-\[
-X(k)=\sum_{n=0}^{N-1}x(n)e^{-j2\pi kn/N}
-\]
-
-The single-sided amplitude spectrum is calculated as:
-
-\[
+$$
 A(k)=\frac{2|X(k)|}{N}
-\]
+$$
 
 where:
 
-- \(A(k)\) – signal amplitude at frequency bin \(k\)
+- \(A(k)\) – FFT amplitude
 - \(X(k)\) – FFT coefficient
-- \(N\) – FFT length
+- \(N\) – number of samples in the window
 
----
+### Harmonic Detection
 
-### 3. Harmonic Peak Detection
+For each harmonic, the expected frequency is:
 
-For each expected harmonic frequency:
-
-\[
+$$
 f_{expected}=k \cdot BPF
-\]
+$$
 
-the FFT spectrum is searched in a frequency range:
+The algorithm searches for the maximum FFT amplitude within:
 
-\[
-f_{search}=f_{expected}\pm2Hz
-\]
+$$
+f_{expected}\pm2Hz
+$$
 
-The detected harmonic amplitude is:
+Detected amplitude:
 
-\[
-A_H=max(A(f_{search}))
-\]
-
-The robust search allows compensation for small frequency variations caused by:
-
-- rotational speed fluctuations
-- FFT frequency resolution
-- measurement noise
+$$
+A_H=\max(A(f)), \quad f\in[f_{expected}-2Hz, f_{expected}+2Hz]
+$$
 
 ---
 
-### 4. IQR-Based Outlier Rejection
-
-Before calculating representative amplitudes, detected harmonic amplitudes are filtered using the Interquartile Range method.
-
-The first and third quartiles are:
-
-\[
-Q_1=P_{25}
-\]
-
-\[
-Q_3=P_{75}
-\]
+### IQR Outlier Rejection
 
 The interquartile range is:
 
-\[
+$$
 IQR=Q_3-Q_1
-\]
+$$
 
-The accepted data range is:
+Accepted values:
 
-\[
+$$
 Q_1-1.5IQR \leq x \leq Q_3+1.5IQR
-\]
+$$
 
-Values outside this range are considered outliers and removed.
+Values outside this range are removed before calculating the representative amplitude.
 
 ---
 
-### 5. Histogram-Based Representative Amplitude
+### Representative Amplitude
 
-After IQR filtering, the dominant operating amplitude is estimated using histogram binning.
+After filtering, histogram-based mode estimation is used:
 
-The filtered signal range is divided into 5 equally sized bins:
+1. Divide remaining values into 5 bins.
+2. Select the bin with the highest number of samples.
+3. Representative amplitude:
 
-\[
-bin_i=[x_i,x_{i+1}]
-\]
-
-The dominant bin is selected:
-
-\[
-bin_{mode}=argmax(count(bin_i))
-\]
-
-The representative amplitude is calculated as the median value inside the selected bin:
-
-\[
-A_{rep}=median(x_{bin_{mode}})
-\]
+$$
+A_{rep}=median(x_{bin})
+$$
 
 If multiple bins have equal counts, the higher-amplitude bin is selected.
 
-This approach reduces the influence of:
-
-- short cavitation bursts
-- transient peaks
-- measurement spikes
-
-while preserving the dominant operating condition.
-
 ---
 
-### 6. Model-to-Full-Scale Scaling
+### Model-to-Full-Scale Scaling
 
-For cavitation similarity analysis, measured model-scale results are converted to full-scale values.
+Frequency scaling:
 
-#### Frequency scaling
+$$
+f_{FS}=f_M \cdot n_{ratio}
+$$
 
-The frequency scale follows the rotation ratio:
+Amplitude scaling:
 
-\[
-f_{FS}=f_M\cdot\frac{n_{FS}}{n_M}
-\]
+$$
+A_{FS}=A_M \cdot \rho_{ratio}\cdot n_{ratio}^{2}\cdot scale^{2}
+$$
 
 where:
 
-- \(f_M\) – model frequency
-- \(f_{FS}\) – full-scale frequency
-- \(n_M\) – model rotational speed
-- \(n_{FS}\) – full-scale rotational speed
+- $\rho_{ratio}$ – density ratio
+- $n_{ratio}$ – rotational speed ratio
+- $scale$ – geometric scale ratio
+
+with:
+
+$$
+n_{ratio}=\frac{n_{FS}}{n_M}
+$$
 
 ---
 
-#### Pressure amplitude scaling
+### Stability Metrics
 
-Pressure fluctuations follow:
+Mean:
 
-\[
-p \propto \rho n^2D^2
-\]
+$$
+\bar{x}=\frac{1}{N}\sum x_i
+$$
 
-Therefore:
+Standard deviation:
 
-\[
-p_{FS}=p_M
-\cdot
-\frac{\rho_{FS}}{\rho_M}
-\cdot
-\left(\frac{n_{FS}}{n_M}\right)^2
-\cdot
-\left(\frac{D_{FS}}{D_M}\right)^2
-\]
+$$
+\sigma=\sqrt{\frac{\sum(x_i-\bar{x})^2}{N-1}}
+$$
 
-where:
+Coefficient of variation:
 
-- \(p_M\) – measured model pressure amplitude
-- \(p_{FS}\) – scaled full-scale pressure amplitude
-- \(\rho\) – water density
-- \(n\) – rotational speed
-- \(D\) – propeller diameter
-
-The complete scaling factor is:
-
-\[
-K_p=
-\rho_{ratio}
-\cdot
-(n_{ratio})^2
-\cdot
-(scale)^2
-\]
-
----
-
-### 7. Stability Metrics
-
-#### Mean
-
-\[
-\bar{x}=\frac{1}{N}\sum_{i=1}^{N}x_i
-\]
-
-Average harmonic amplitude after filtering.
-
----
-
-#### Standard deviation
-
-\[
-\sigma=
-\sqrt{
-\frac{1}{N-1}
-\sum_{i=1}^{N}(x_i-\bar{x})^2
-}
-\]
-
-Measures amplitude variation.
-
----
-
-#### Coefficient of Variation
-
-\[
+$$
 CoV=\frac{\sigma}{\bar{x}}\cdot100\%
-\]
+$$
 
-Interpretation:
+IQR spread:
 
-- <10% – stable signal
-- 10–30% – moderate variation
-- >30% – unstable signal
-
----
-
-#### IQR / Median
-
-\[
+$$
 R_{IQR}=\frac{IQR}{median(x)}
-\]
+$$
 
-Interpretation:
+Quartile dispersion:
 
-- <0.2 – stable
-- 0.2–0.5 – moderate
-- >0.5 – unstable
-
----
-
-#### Quartile Dispersion (CQD)
-
-\[
-CQD=
-\frac{Q_3-Q_1}{Q_3+Q_1}
-\]
-
-Interpretation:
-
-- close to 0 – stable
-- >0.3 – unstable
+$$
+CQD=\frac{Q_3-Q_1}{Q_3+Q_1}
+$$
 
 ---
