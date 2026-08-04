@@ -6,11 +6,11 @@ A **Streamlit** application for analyzing pressure signals from cavitation tunne
 
 ## Features
 
-- Supports multiple input formats:
-  - Spider8 (`.asc`)
-  - QuantumX (`.asc`)
-  - Custom CSV (5 pressure channels)
-- Gain calibration
+- Import measurement data exported from:
+  - HBM Spider8 measurement system (`.asc`)
+  - HBM QuantumX measurement system (`.asc`)
+  - Generic CSV files (5 pressure channels)
+- Import Gain calibration .csv file
 - Sliding-window FFT analysis
 - Blade Passing Frequency (BPF) harmonic extraction
 - Robust harmonic detection (±2 Hz search window)
@@ -44,15 +44,5 @@ Run the application:
 ```bash
 streamlit run app.py
 ```
-
----
-
-## Supported File Formats
-
-| Format | Description |
-|---------|-------------|
-| Spider8 | `.asc` files with pressure channels |
-| QuantumX | `.asc` files with pressure channels |
-| CSV | Five-column CSV containing pressure signals (`pressure1`–`pressure5`) |
 
 ---
